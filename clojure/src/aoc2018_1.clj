@@ -27,9 +27,19 @@
 
 )
 
+;; first, next 를 사용한 버전
 (loop [seen #{}
        vs (concat [0] (reductions + (flatten (repeat vs))))]
   (let [v (first vs)]
     (if (seen v)
       v
       (recur (conj seen v) (next vs)))))
+
+;; destructuring, cycle, cons
+;;   destructuring, cycle 은 확실히 사용하는 것이 더 좋은 것이다 싶은데요.
+;;   cons 는 좀 애매하다 싶습니다.
+(loop [seen #{}
+       [f & rest] (cons 0 (reductions + (cycle vs)))]
+  (if (seen f)
+    f
+    (recur (conj seen f) rest)))

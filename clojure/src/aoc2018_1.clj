@@ -26,7 +26,7 @@
 ;;
 ;; f & rest 라는 변수명을 사용하다가
 ;; review 후에 v & more 로 바꿨습니다.
-(def find-first-dup-1 [frequencies]
+(defn find-first-dup-1 [frequencies]
   (loop [seen #{}
          [v & more] frequencies]
     (if (seen v)
@@ -34,7 +34,7 @@
       (recur (conj seen v) more))))
 
 ;; reduce 를 사용하자
-(def find-first-dup-2 [frequencies]
+(defn find-first-dup-2 [frequencies]
   (let [[_ first-dup] (reduce (fn [[seen first-dup] v]
                                 (if (seen v)
                                   (reduced [seen v])
@@ -43,6 +43,9 @@
                               frequencies)]
     first-dup))
 
+(defn cycled-freq [vs]
+  (cons 0 (reductions + (cycle vs))))
+
 (comment
 
   (def vs [+1 -2 +3 +1])
@@ -50,6 +53,7 @@
   (def vs [+3, +3, +4, -2, -4])
   (def vs [-6, +3, +8, +5, -6])
 
-  (reductions + (cons 0 (reductions + (cycle vs))))
+  (find-first-dup-1 (cycled-freq vs))
+  (find-first-dup-2 (cycled-freq vs))
 
   )

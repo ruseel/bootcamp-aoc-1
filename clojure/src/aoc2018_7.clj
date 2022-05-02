@@ -2,12 +2,6 @@
   (:require [clojure.java.io :as io]
             [clojure.set :as set]))
 
-(def lines
-  (-> "day7.txt"
-      io/resource
-      io/reader
-      line-seq))
-
 (defn- lines->deps-tuples
   "list of tuple, tuple [x y] means x depends on y"
   [lines]
@@ -43,7 +37,7 @@
           deps
           (nodes-with-no-incoming-edges deps)))
 
-(defn remove-node-with-no-incoming-edges [deps n]
+(defn remove-n-in-val [deps n]
   (assert (map? deps))
   (assert (empty? (deps n)))
   (reduce-kv (fn [m k nodes]
@@ -52,81 +46,45 @@
              {}
              deps))
 
-(def deps (->deps (lines->deps-tuples lines)))
-
-(-> deps
-    ammend-deps
-    (remove-node-with-no-incoming-edges "G")
-    (remove-node-with-no-incoming-edges "K")
-    (remove-node-with-no-incoming-edges "P")
-    (remove-node-with-no-incoming-edges "T")
-    #_(nodes-with-no-incoming-edges)
-    #_(remove-node-with-no-incoming-edges "S")
-    #_(remove-node-with-no-incoming-edges "X")
-    #_(nodes-with-no-incoming-edges)
-    #_(remove-node-with-no-incoming-edges "B")
-    #_(remove-node-with-no-incoming-edges "L")
-    #_(remove-node-with-no-incoming-edges "I")
-    #_(nodes-with-no-incoming-edges)
-    )
-
-
-(loop [,,,]
-  (if ,,,
-    ,,,
-    (recur state-1 state-2 next)))
-
-; while deps is not empty?
-;   for each node in sorted (nodes with no-incoming-edge)
-;     remove node in deps
-
-(defn remove-nodes [deps nodes]
-  (reduce (fn [deps n]
-            (remove-node-with-no-incoming-edges deps n))
-          deps
-          nodes))
-
 (defn solve
   ([deps]
-   (solve deps
-          (sort (keys-with-empty-val (ammend-deps deps)))))
-  ([deps nodes-to-remove]
-   (let [nodes' nodes-to-remove]
+   (solve deps (keys-with-empty-val deps)))
+  ([deps remove-candidates]
+   (let [[n & _] (sort remove-candidates)]
      (lazy-seq
       (cons
-       nodes'
-       (let [deps (remove-nodes deps nodes')]
+       n
+       (let [deps (-> (remove-n-in-val deps n)
+                      (dissoc n))]
          (if (empty? deps)
            nil
-           (solve deps
-                  (sort (keys-with-empty-val deps))))))))))
-
-(-> deps
-    solve
-    flatten)
-
-
-(count (all-nodes deps))
-
-(let [deps deps
-      ns (sort (nodes-with-no-incoming-edges deps))]
-
-  (remove-nodes deps ns))
-
-(defn step [deps ])
+           (solve deps))))))))
 
 (comment
 
- lines
+  (set! *print-length* 30)
 
- (set! *print-length* 30)
+  (def lines
+    (-> "day7.txt"
+        io/resource
+        io/reader
+        line-seq))
 
- (find-root rev-deps "X")
+  (def deps (->deps (lines->deps-tuples lines)))
 
- (first (rev-deps "X"))
+  (->> deps
+       ammend-deps
+       solve
+       clojure.string/join)
 
- (deps "X")
 
- lines
+  (-> deps
+      ammend-deps
+      (remove-n-in-val "G")
+      #_(dissoc "G")
+      #_(remove-n-in-val "K")
+      #_(remove-n-in-val "P")
+      #_(remove-n-in-val "T")
+      )
 
- )
+  )

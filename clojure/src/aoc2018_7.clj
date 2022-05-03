@@ -46,10 +46,15 @@
              {}
              deps))
 
+(defn remove-nodes-in-val [deps nodes]
+  (reduce #(remove-n-in-val %1 %2)
+          deps
+          nodes))
+
 (defn solve-part1
   ([deps]
-   (solve-part1 deps (keys-with-empty-val deps)))
-  ([deps remove-candidates]
+   (solve-part1 [] deps (keys-with-empty-val deps)))
+  ([result-vec deps remove-candidates]
    (let [n (first (sort remove-candidates))]
      (lazy-seq
       (cons
@@ -57,15 +62,15 @@
        (let [deps (-> (remove-n-in-val deps n)
                       (dissoc n))]
          (if (empty? deps)
-           nil
-           (solve-part1 deps))))))))
+           result-vec
+           (solve-part1 (conj result-vec n) deps))))))))
+
 
 (defrecord WorkerPool [capacity cur-time workers])
 
 (defrecord Worker [node ends-at])
 
 (map->Worker {:node "A" :ends-at 61})
-
 
 (def wp (map->WorkerPool {:capacity 5
                           :cur-time 0
@@ -76,19 +81,22 @@
     (- capacity (count workers))))
 
 (defn emulate-time-to
-  "worker-pool 의 cur-time 을 time 으로 옮기고, :finished-queue 에 끝난 worker 를
+  "worker-pool 의 cur-time 을 time 으로 옮기고,
+   :finished-queue 에 완료된 node 를
    :workers 에 안끝난 worker 를 넣습니다"
   [worker-pool time]
   (let [{:keys [cur-time workers]} worker-pool
         ended? (fn [worker] (<= (:ends-at worker) time))]
     (-> worker-pool
         (assoc :cur-time time)
-        (assoc :finished-queue (filter ended? workers))
+        (assoc :finished-queue (->> workers
+                                    (filter ended?)
+                                    (map :node)))
         (update :workers
                 (fn [workers]
                   (filter (complement ended?) workers))))))
 
-(defn next-available-time [worker-pool]
+(defn next-ends-at [worker-pool]
   (some->> worker-pool :workers (map :ends-at) seq (apply min)))
 
 (defn processing-duration [node]
@@ -106,32 +114,48 @@
 (defn try-start-processing [worker-pool n]
   (if (and n (> (available-worker-count worker-pool) 0))
     (start-processing worker-pool n)
-    (emulate-time-to worker-pool (next-available-time worker-pool))))
+    (emulate-time-to worker-pool (next-ends-at worker-pool))))
 
+(defn step [{:keys [deps worker-pool] :as state}]
+  (let [n (-> deps
+              keys-with-empty-val
+              sort
+              first)
+        start-processing?
+        (and n
+             (> (available-worker-count worker-pool) 0))]
+    (if start-processing?
+      {:worker-pool (start-processing worker-pool n)
+       :deps (remove-nodes-in-val
+              (dissoc deps n)
+              (:finished-queue worker-pool))}
+      (let [worker-pool (emulate-time-to
+                         worker-pool
+                         (next-ends-at worker-pool))]
+        {:worker-pool (dissoc worker-pool :finished-queue)
+         :deps (remove-nodes-in-val
+                deps
+                (:finished-queue worker-pool))}))))
 
 (defn solve-part2
   ([worker-pool deps]
-   (let [remove-candicates (keys-with-empty-val deps)
-         n ((comp first sort) remove-candidates)
-         start-processing? (and n (> (available-worker-count worker-pool) 0))
-         worker-pool' (if start-processing?
-                        (start-processing worker-pool n)
-                        (emulate-time-to worker-pool
-                                         (next-available-time worker-pool)))
-         deps' (if start-processing?
-                 (dissoc deps n)
-                 deps)]
-     (lazy-seq
-      (cons
-       worker-pool
-       (let [finished-queue (:finished-queue worker-pool')
-             worker-pool'' (dissoc worker-pool' :finished-queue)
-             deps (reduce #(remove-n-in-val %1 %2)
-                          deps'
-                          finished-queue)]
-         (if (empty? deps)
-           worker-pool''
-           (solve-part2 worker-pool'' deps))))))))
+   (->> {:worker-pool worker-pool :deps (ammend-deps deps)}
+        (iterate step)
+        (drop-while (fn [{deps :deps
+                          {workers :workers} :worker-pool}]
+                      (or (not (empty? workers))
+                          (not (empty? deps)))))
+        first
+        :worker-pool
+        :cur-time)))
+
+;; step function 만들기
+;; step function 안에서 하는 일을 한글로 순차적으로 써보기
+;;
+;; step (앞으로 할일, 처리된 finished-queue, cur-time) state
+;;   step function 안에 들어있는 과정마다 함수로 나누었음.
+;;
+;; doc string 을 달면서 코딩하면 좀 더 쉬울 수도 있겠음.
 
 (comment
 
@@ -156,7 +180,7 @@
 
   (-> wp
       (advance-time-to 120)
-      (next-available-time))
+      (next-ends-at))
 
   (-> wp
       (start-processing "D"))
@@ -176,7 +200,7 @@
   (->> deps
        ammend-deps
        solve-part1
-       clojure.string/join)
+       #_clojure.string/join)
 
   ;; (comp first sort) 를 min 으로 바꿔 보려고 시도는 했었는데
   ;; string 을 number 로 바꿀 수 없다고 에러가 발생합니다.

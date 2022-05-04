@@ -8,23 +8,34 @@
   (for [s lines]
     (vec (reverse (drop 1 (re-seq #"[A-Z]" s))))))
 
-(defn ->deps [a-deps-tuples]
+(defn ->deps
+  "deps-tuple 을 의존관계를 담은 map 으로 변환합니다.
+  key 에 node 를, val 에 key 가 의존하는 노드 목록을 담은 map 을 리턴합니다.
+
+  x 가 y 에 의존한다를 y가 끝난 후에 x를 시작할 수 있다는 의미로 사용합니다."
+  [a-deps-tuples]
   (reduce (fn [m [x y]]
             (update m x #((fnil conj []) % y)))
           {}
           a-deps-tuples))
 
-(defn all-nodes [deps]
+(defn all-nodes
+  "deps 안에 존재하는 모든 nodes."
+  [deps]
   (let [nodes-in-key (keys deps)
         nodes-in-val (apply concat (vals deps))]
     (concat nodes-in-key nodes-in-val)))
 
-(defn nodes-only-exists-in-val [deps]
+(defn nodes-only-exists-in-val
+  "key 에 존재하지 않고 val (== list of nodes) 에만 존재하는 nodes."
+  [deps]
   (set/difference
    (set (all-nodes deps))
    (set (keys deps))))
 
-(defn keys-with-empty-val [deps]
+(defn keys-with-empty-val
+  "empty list of nodes 를 가진 key 들"
+  [deps]
   (reduce-kv (fn [result k vs]
                (if (empty? vs)
                  (conj result k)
@@ -32,7 +43,10 @@
              []
              deps))
 
-(defn ammend-deps [deps]
+(defn ammend-deps
+  "deps 를, val 에만 존재하는 node 도 key 로
+   -- empty vector 를 가지도록 해서 -- 넣습니다."
+  [deps]
   (reduce (fn [deps n] (assoc deps n []))
           deps
           (nodes-only-exists-in-val deps)))
@@ -53,8 +67,8 @@
 
 (defn solve-part1
   ([deps]
-   (solve-part1 [] deps (keys-with-empty-val deps)))
-  ([result-vec deps remove-candidates]
+   (solve-part1 deps (keys-with-empty-val deps)))
+  ([deps remove-candidates]
    (let [n (first (sort remove-candidates))]
      (lazy-seq
       (cons
@@ -62,19 +76,10 @@
        (let [deps (-> (remove-n-in-val deps n)
                       (dissoc n))]
          (if (empty? deps)
-           result-vec
-           (solve-part1 (conj result-vec n) deps))))))))
+           nil
+           (solve-part1 deps))))))))
 
-
-(defrecord WorkerPool [capacity cur-time workers])
-
-(defrecord Worker [node ends-at])
-
-(map->Worker {:node "A" :ends-at 61})
-
-(def wp (map->WorkerPool {:capacity 5
-                          :cur-time 0
-                          :workers []}))
+;; part2
 
 (defn available-worker-count [worker-pool]
   (let [{:keys [capacity workers]} worker-pool]
@@ -161,13 +166,9 @@
 
   ;; part2
 
-  (def wp
-    (map->WorkerPool
-     {:capacity 5
-      :cur-time 0
-      :workers [(map->Worker {:node "A" :ends-at 61})
-                (map->Worker {:node "B" :ends-at 120})
-                (map->Worker {:node "C" :ends-at 180})]}))
+  (defrecord WorkerPool [capacity cur-time workers])
+
+  (defrecord Worker [node ends-at])
 
   (def wp
     (map->WorkerPool {:capacity 5
@@ -177,13 +178,6 @@
   (solve-part2
    wp
    (-> deps ammend-deps))
-
-  (-> wp
-      (advance-time-to 120)
-      (next-ends-at))
-
-  (-> wp
-      (start-processing "D"))
 
   ;; part1
 
@@ -200,10 +194,6 @@
   (->> deps
        ammend-deps
        solve-part1
-       #_clojure.string/join)
-
-  ;; (comp first sort) 를 min 으로 바꿔 보려고 시도는 했었는데
-  ;; string 을 number 로 바꿀 수 없다고 에러가 발생합니다.
-  ; (min "A" "B")
+       clojure.string/join)
 
   )

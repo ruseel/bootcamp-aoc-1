@@ -88,7 +88,7 @@
 (defn emulate-time-to
   "worker-pool 의 cur-time 을 time 으로 옮기고,
    :finished-queue 에 완료된 node 를
-   :workers 에 안끝난 worker 를 넣습니다"
+   :workers 에 안끝난 worker 를 넣습니다."
   [worker-pool time]
   (let [{:keys [cur-time workers]} worker-pool
         ended? (fn [worker] (<= (:ends-at worker) time))]
@@ -97,9 +97,8 @@
         (assoc :finished-queue (->> workers
                                     (filter ended?)
                                     (map :node)))
-        (update :workers
-                (fn [workers]
-                  (filter (complement ended?) workers))))))
+        (assoc :workers
+               (filter (complement ended?) workers)))))
 
 (defn next-ends-at [worker-pool]
   (some->> worker-pool :workers (map :ends-at) seq (apply min)))
@@ -108,8 +107,11 @@
   (assert (= (count node) 1))
   (+ 60 (- (int (first node)) 64)))
 
+(defn worker-available? [worker-pool]
+  (pos? (available-worker-count worker-pool)))
+
 (defn start-processing [worker-pool n]
-  (assert (> (available-worker-count worker-pool) 0))
+  (assert (worker-available? worker-pool))
   (let [{:keys [worker cur-time]} worker-pool
         new-worker {:node n
                     :ends-at (+ cur-time (processing-duration n))}]
@@ -118,7 +120,7 @@
             conj new-worker)))
 
 (defn try-start-processing [worker-pool n]
-  (if (and n (> (available-worker-count worker-pool) 0))
+  (if (and n (worker-available? worker-pool))
     (start-processing worker-pool n)
     (emulate-time-to worker-pool (next-ends-at worker-pool))))
 
@@ -128,8 +130,7 @@
               sort
               first)
         start-processing?
-        (and n
-             (> (available-worker-count worker-pool) 0))]
+        (and n (worker-available? worker-pool))]
     (if start-processing?
       {:worker-pool (start-processing worker-pool n)
        :deps (remove-nodes-in-val
@@ -157,8 +158,12 @@
 
 ;; solve-part2 도 state 를 받도록 변경 완료.
 ;; record 를 제거.
+;; (comp not empty?) 를 not-emtpy 로 변경.
+;;
 ;; part1 을 part2 의 코드로 다시 풀자.
 ;; solve-part1 함수도 iterate + drop-while 로 바꾸자.
+;; (> x 0) 를 pos? 로 바꾸자.
+;;
 
 (comment
 
@@ -184,6 +189,18 @@
                               :cur-time 0
                               :workers []}
                 :deps (-> deps ammend-deps)})
+
+  ;; part1 을 solve-part2 의 코드로 풀자
+
+  (->> {:worker-pool {:capacity 1
+                      :cur-time 0
+                      :workers []}
+        :deps (-> deps ammend-deps)}
+       (iterate step)
+       (take-while (fn [{deps :deps
+                         {workers :workers} :worker-pool}]
+                     (or (not-empty workers)
+                         (not-empty deps)))))
 
   ;; part1
 

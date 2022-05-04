@@ -151,7 +151,7 @@
        :history
        (apply str)))
 
-(defn solve-part1-rev1
+#_(defn solve-part1-rev1
   ([deps]
    (solve-part1 deps (keys-with-empty-val deps)))
   ([deps remove-candidates]

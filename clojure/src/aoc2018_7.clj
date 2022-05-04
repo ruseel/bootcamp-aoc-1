@@ -111,7 +111,8 @@
 (defn start-processing [worker-pool n]
   (assert (> (available-worker-count worker-pool) 0))
   (let [{:keys [worker cur-time]} worker-pool
-        new-worker (->Worker n (+ cur-time (processing-duration n)))]
+        new-worker {:node n
+                    :ends-at (+ cur-time (processing-duration n))}]
     (update worker-pool
             :workers
             conj new-worker)))
@@ -143,43 +144,31 @@
                 (:finished-queue worker-pool))}))))
 
 (defn solve-part2
-  ([worker-pool deps]
-   (->> {:worker-pool worker-pool :deps (ammend-deps deps)}
+  ([{:keys [deps worker-pool] :as state}]
+   (->> state
         (iterate step)
         (drop-while (fn [{deps :deps
                           {workers :workers} :worker-pool}]
-                      (or (not (empty? workers))
-                          (not (empty? deps)))))
+                      (or (not-empty workers)
+                          (not-empty deps))))
         first
         :worker-pool
         :cur-time)))
 
-;; step function 만들기
-;; step function 안에서 하는 일을 한글로 순차적으로 써보기
-;;
-;; step (앞으로 할일, 처리된 finished-queue, cur-time) state
-;;   step function 안에 들어있는 과정마다 함수로 나누었음.
-;;
-;; doc string 을 달면서 코딩하면 좀 더 쉬울 수도 있겠음.
+;; solve-part2 도 state 를 받도록 변경 완료.
+;; record 를 제거.
+;; part1 을 part2 의 코드로 다시 풀자.
+;; solve-part1 함수도 iterate + drop-while 로 바꾸자.
 
 (comment
 
   ;; part2
 
-  (defrecord WorkerPool [capacity cur-time workers])
-
-  (defrecord Worker [node ends-at])
-
-  (def wp
-    (map->WorkerPool {:capacity 5
-                      :cur-time 0
-                      :workers []}))
-
-  (solve-part2
-   wp
-   (-> deps ammend-deps))
-
-  ;; part1
+  #_(do
+    (in-ns 'user)
+    (remove-ns 'aoc2018-7)
+    (load-file "src/aoc2018_7.clj")
+    (in-ns 'aoc2018-7))
 
   (set! *print-length* 30)
 
@@ -191,8 +180,14 @@
 
   (def deps (->deps (lines->deps-tuples lines)))
 
-  (->> deps
-       ammend-deps
+  (solve-part2 {:worker-pool {:capacity 5
+                              :cur-time 0
+                              :workers []}
+                :deps (-> deps ammend-deps)})
+
+  ;; part1
+
+  (->> deps ammend-deps
        solve-part1
        clojure.string/join)
 

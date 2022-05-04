@@ -119,11 +119,6 @@
             :workers
             conj new-worker)))
 
-(defn try-start-processing [worker-pool n]
-  (if (and n (worker-available? worker-pool))
-    (start-processing worker-pool n)
-    (emulate-time-to worker-pool (next-ends-at worker-pool))))
-
 (defn step [{:keys [deps worker-pool] :as state}]
   (let [n (-> deps
               keys-with-empty-val
@@ -159,21 +154,15 @@
 ;; solve-part2 도 state 를 받도록 변경 완료.
 ;; record 를 제거.
 ;; (comp not empty?) 를 not-emtpy 로 변경.
+;; (> x 0) 를 pos? 로 바꿈.
 ;;
 ;; part1 을 part2 의 코드로 다시 풀자.
 ;; solve-part1 함수도 iterate + drop-while 로 바꾸자.
-;; (> x 0) 를 pos? 로 바꾸자.
 ;;
 
 (comment
 
   ;; part2
-
-  #_(do
-    (in-ns 'user)
-    (remove-ns 'aoc2018-7)
-    (load-file "src/aoc2018_7.clj")
-    (in-ns 'aoc2018-7))
 
   (set! *print-length* 30)
 
@@ -200,7 +189,8 @@
        (take-while (fn [{deps :deps
                          {workers :workers} :worker-pool}]
                      (or (not-empty workers)
-                         (not-empty deps)))))
+                         (not-empty deps))))
+       #_(map (comp :worker-pool :finished-queue)))
 
   ;; part1
 

@@ -34,7 +34,7 @@
    (set (keys deps))))
 
 (defn keys-with-empty-val
-  "empty list of nodes 를 가진 key 들"
+  "empty list of nodes 를 가진 key 목록."
   [deps]
   (reduce-kv (fn [result k vs]
                (if (empty? vs)
@@ -96,7 +96,8 @@
 (defn worker-available? [worker-pool]
   (pos? (available-worker-count worker-pool)))
 
-(defn start-processing [worker-pool n]
+(defn start-processing
+  [worker-pool n]
   (assert (worker-available? worker-pool))
   (let [{:keys [worker cur-time]} worker-pool
         new-worker {:node n
@@ -169,10 +170,11 @@
 ;; record 를 제거.
 ;; (comp not empty?) 를 not-emtpy 로 변경.
 ;; (> x 0) 를 pos? 로 바꿈.
-;;
 ;; part1 을 part2 의 코드로 바꿈
-;;   언제 start-procssing 한 노드를 저장하나? history 에 남기자.
+;;   언제 start-procssing 한 노드를 저장하나? history 에 남김.
 ;; solve-part1 함수도 iterate + drop-while 로 바꿈.
+;;
+;; step 을 좀 더 읽기 쉽게 바꾸자.
 ;;
 
 (comment
@@ -201,14 +203,14 @@
                 :deps (-> deps ammend-deps)
                 :history []})
 
-  ;; part1 을 solve-part2 의 코드로 풀자
+  ;; part1-rev2
   (solve-part1-rev2 {:worker-pool {:capacity 1
                                    :cur-time 0
                                    :workers []}
                      :deps (-> deps ammend-deps)
                      :history []})
 
-  ;; part1
+  ;; part1-rev1
 
   (->> deps ammend-deps
        solve-part1-rev1

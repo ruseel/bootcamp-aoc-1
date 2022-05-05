@@ -67,88 +67,73 @@
 
 ;; part2
 
-(defn available-worker-count [worker-pool]
-  (let [{:keys [capacity workers]} worker-pool]
-    (- capacity (count workers))))
+(defn available-worker-count [{:keys [capacity workers]}]
+  (- capacity (count workers)))
 
-(defn emulate-time-to
-  "worker-pool 의 cur-time 을 time 으로 옮기고,
-   :finished-queue 에 완료된 node 를
-   :workers 에 안끝난 worker 를 넣습니다."
-  [worker-pool time]
-  (let [{:keys [cur-time workers]} worker-pool
-        ended? (fn [worker] (<= (:ends-at worker) time))]
-    (-> worker-pool
-        (assoc :cur-time time)
-        (assoc :finished-queue
-               (->> workers
-                    (filter ended?)
-                    (map :node)))
-        (assoc :workers
-               (filter (complement ended?) workers)))))
+(defn next-ends-at [{:keys [workers]}]
+  (->> workers (map :ends-at) seq (apply min)))
 
-(defn next-ends-at [worker-pool]
-  (some->> worker-pool :workers (map :ends-at) seq (apply min)))
+(defn emulate-time-to-next-ends-at [state]
+  (emulate-time-to state (next-ends-at state)))
 
 (defn processing-duration [node]
   {:pre [(= 1 (count node))]}
   (+ 60 (- (int (first node)) 64)))
 
-(defn worker-available? [worker-pool]
-  (pos? (available-worker-count worker-pool)))
+(defn worker-available? [state]
+  (pos? (available-worker-count state)))
 
-(defn start-processing
-  [worker-pool n]
-  {:pre [(worker-available? worker-pool)]}
-  (let [{:keys [worker cur-time]} worker-pool]
-    (update worker-pool
-            :workers
-            conj
-            {:node n
-             :ends-at (+ cur-time (processing-duration n))})))
+(defn assign
+  [{:keys [cur-time] :as state} n]
+  {:pre [(worker-available? state)]}
+  (if (nil? n)
+    state
+    (-> state
+        (update :workers
+                #(conj %
+                       {:node n
+                        :ends-at (+ cur-time (processing-duration n))}))
+        (update :deps
+                #(dissoc % n))
+        (update :history
+                #(conj % n)))))
 
-(defn step [{:keys [deps worker-pool history] :as state}]
+(defn emulate-time-to
+  "cur-time 을 time 으로 옮기고,
+   deps 에서 완료된 nodes 를 지우고,
+   workers 에 진행중인 worker 만 남깁니다."
+  [{:keys [cur-time deps workers] :as state} time]
+  (let [ended? (fn [worker] (<= (:ends-at worker) time))
+        finished-nodes (->> workers
+                            (filter ended?)
+                            (map :node))]
+    (merge state
+           {:cur-time time
+            :deps (remove-nodes-in-val deps finished-nodes)
+            :workers (filter (complement ended?) workers)})))
+
+(defn step [{:keys [deps history] :as state}]
   (let [n (-> deps
               keys-with-empty-val
               sort
-              first)
+              first)]
+    (if (and (worker-available? state) n)
+      (assign state n)
+      (emulate-time-to-next-ends-at state))))
 
-        start-processing?
-        (and n (worker-available? worker-pool))
-
-        woker-pool' (if start-processing?
-                      (-> worker-pool
-                          (start-processing n)
-                          (dissoc :finished-queue))
-                      (emulate-time-to worker-pool (next-ends-at worker-pool)))
-        deps' (remove-nodes-in-val
-               ((if start-processing? #(dissoc % n) identity)
-                deps)
-               (:finished-queue worker-pool))
-        histroy' (if start-processing?
-                   (conj history n)
-                   history)]
-
-    {:worker-pool worker-pool'
-     :deps deps'
-     :history history'}))
-
-(defn solve-part2 [{:keys [deps worker-pool] :as state}]
+(defn solve-part2 [state]
   (->> state
        (iterate step)
-       (drop-while (fn [{deps :deps
-                         {workers :workers} :worker-pool}]
+       (drop-while (fn [{:keys [workers deps]}]
                      (or (not-empty workers)
                          (not-empty deps))))
        first
-       :worker-pool
        :cur-time))
 
 (defn solve-part1-rev2 [state]
   (->> state
        (iterate step)
-       (drop-while (fn [{deps :deps
-                         {workers :workers} :worker-pool}]
+       (drop-while (fn [{:keys [workers deps]}]
                      (or (not-empty workers)
                          (not-empty deps))))
        first
@@ -157,7 +142,7 @@
 
 #_(defn solve-part1-rev1
   ([deps]
-   (solve-part1 deps (keys-with-empty-val deps)))
+   (solve-part1-rev1 deps (keys-with-empty-val deps)))
   ([deps remove-candidates]
    (let [n (first (sort remove-candidates))]
      (lazy-seq
@@ -167,7 +152,7 @@
                       (dissoc n))]
          (if (empty? deps)
            nil
-           (solve-part1 deps))))))))
+           (solve-part1-rev1 deps))))))))
 
 ;; solve-part2 도 state 를 받도록 변경 완료.
 ;; record 를 제거.
@@ -198,24 +183,27 @@
         io/reader
         line-seq))
 
-  (def deps (->deps (lines->deps-tuples lines)))
+  (def deps (-> lines
+                lines->deps-tuples
+                ->deps
+                ammend-deps))
 
-  (solve-part2 {:worker-pool {:capacity 5
-                              :cur-time 0
-                              :workers []}
-                :deps (-> deps ammend-deps)
+  (solve-part2 {:capacity 5
+                :deps deps
+                :cur-time 0
+                :workers []
                 :history []})
 
   ;; part1-rev2
-  (solve-part1-rev2 {:worker-pool {:capacity 1
-                                   :cur-time 0
-                                   :workers []}
-                     :deps (-> deps ammend-deps)
+  (solve-part1-rev2 {:capacity 1
+                     :deps deps
+                     :cur-time 0
+                     :workers []
                      :history []})
 
   ;; part1-rev1
 
-  (->> deps ammend-deps
+  (->> deps
        solve-part1-rev1
        clojure.string/join)
 

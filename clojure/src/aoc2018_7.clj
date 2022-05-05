@@ -52,8 +52,8 @@
           (nodes-only-exists-in-val deps)))
 
 (defn remove-n-in-val [deps n]
-  (assert (map? deps))
-  (assert (empty? (deps n)))
+  {:pre [(map? deps)
+         (empty? (deps n))]}
   (reduce-kv (fn [m k nodes]
                (let [nodes' (seq (remove #{n} nodes))]
                  (assoc m k (vec nodes'))))
@@ -80,9 +80,10 @@
         ended? (fn [worker] (<= (:ends-at worker) time))]
     (-> worker-pool
         (assoc :cur-time time)
-        (assoc :finished-queue (->> workers
-                                    (filter ended?)
-                                    (map :node)))
+        (assoc :finished-queue
+               (->> workers
+                    (filter ended?)
+                    (map :node)))
         (assoc :workers
                (filter (complement ended?) workers)))))
 
@@ -90,7 +91,7 @@
   (some->> worker-pool :workers (map :ends-at) seq (apply min)))
 
 (defn processing-duration [node]
-  (assert (= (count node) 1))
+  {:pre [(= 1 (count node))]}
   (+ 60 (- (int (first node)) 64)))
 
 (defn worker-available? [worker-pool]
@@ -98,36 +99,39 @@
 
 (defn start-processing
   [worker-pool n]
-  (assert (worker-available? worker-pool))
-  (let [{:keys [worker cur-time]} worker-pool
-        new-worker {:node n
-                    :ends-at (+ cur-time (processing-duration n))}]
+  {:pre [(worker-available? worker-pool)]}
+  (let [{:keys [worker cur-time]} worker-pool]
     (update worker-pool
             :workers
-            conj new-worker)))
+            conj
+            {:node n
+             :ends-at (+ cur-time (processing-duration n))})))
 
 (defn step [{:keys [deps worker-pool history] :as state}]
   (let [n (-> deps
               keys-with-empty-val
               sort
               first)
+
         start-processing?
-        (and n (worker-available? worker-pool))]
-    (if start-processing?
-      (let [worker-pool (start-processing worker-pool n)]
-        {:worker-pool worker-pool
-         :deps (remove-nodes-in-val
-                (dissoc deps n)
-                (:finished-queue worker-pool))
-         :history (conj history n)})
-      (let [worker-pool (emulate-time-to
-                         worker-pool
-                         (next-ends-at worker-pool))]
-        {:worker-pool (dissoc worker-pool :finished-queue)
-         :deps (remove-nodes-in-val
-                deps
-                (:finished-queue worker-pool))
-         :history history}))))
+        (and n (worker-available? worker-pool))
+
+        woker-pool' (if start-processing?
+                      (-> worker-pool
+                          (start-processing n)
+                          (dissoc :finished-queue))
+                      (emulate-time-to worker-pool (next-ends-at worker-pool)))
+        deps' (remove-nodes-in-val
+               ((if start-processing? #(dissoc % n) identity)
+                deps)
+               (:finished-queue worker-pool))
+        histroy' (if start-processing?
+                   (conj history n)
+                   history)]
+
+    {:worker-pool worker-pool'
+     :deps deps'
+     :history history'}))
 
 (defn solve-part2 [{:keys [deps worker-pool] :as state}]
   (->> state
@@ -139,7 +143,6 @@
        first
        :worker-pool
        :cur-time))
-
 
 (defn solve-part1-rev2 [state]
   (->> state

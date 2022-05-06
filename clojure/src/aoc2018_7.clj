@@ -33,15 +33,12 @@
    (set (all-nodes jobs))
    (set (keys jobs))))
 
-(defn keys-with-empty-val
+(defn find-jobs-ready
   "empty list of nodes 를 가진 key 목록."
   [jobs]
-  (reduce-kv (fn [result k vs]
-               (if (empty? vs)
-                 (conj result k)
-                 result))
-             []
-             jobs))
+  (->> jobs
+       (filter #(-> % val empty?))
+       keys))
 
 (defn ammend-jobs
   "jobs 를 고칩니다.
@@ -49,33 +46,20 @@
    val 에만 존재하는 node(==job) 도 key 로
    -- empty vector 를 val 로 -- 넣습니다."
   [jobs]
-  (reduce (fn [jobs n] (assoc jobs n []))
-          jobs
-          (nodes-only-exists-in-val jobs)))
+  (merge jobs
+         (into
+          {}
+          (map #([% []])
+               (nodes-only-exists-in-val jobs)))))
 
-(defn remove-finished-job-in-val [jobs a-finished-job]
-  {:pre [(map? jobs)
-         (empty? (jobs a-finished-job))]}
-  (reduce-kv (fn [m k nodes]
-               (let [nodes' (seq (remove #{a-finished-job} nodes))]
-                 (assoc m k (vec nodes'))))
-             {}
-             jobs))
-
-(defn remove-finished-jobs-in-val [jobs finished-jobs]
-  (reduce #(remove-finished-job-in-val %1 %2)
-          jobs
-          finished-jobs))
+(defn handle-finished-jobs [jobs finished-jobs]
+  (update-vals jobs #(remove finished-jobs %)))
 
 ;; part2
 
-(def find-jobs-ready keys-with-empty-val)
-
-(def handle-finished-jobs remove-finished-jobs-in-val)
-
 (defn processing-seconds [job]
   {:pre [(= 1 (count job))]}
-  (+ 60 (- (int (first job)) 64)))
+  (+ 60 (- (int (first job)) (dec (int \A)))))
 
 (defn available-worker-count [{:keys [capacity workers]}]
   (- capacity (count workers)))
@@ -93,18 +77,17 @@
    jobs 에서도 제거하고 (dissoc)
    history 에도 추가한다."
   [{:keys [cur-sec] :as state} job]
-  {:pre [(worker-available? state)]}
-  (if (nil? job)
-    state
-    (-> state
-        (update :workers
-                #(conj %
-                       {:job job
-                        :ends-at (+ cur-sec (processing-seconds job))}))
-        (update :jobs
-                #(dissoc % job))
-        (update :history
-                #(conj % job)))))
+  {:pre [(worker-available? state)
+         (some? job)]}
+  (-> state
+      (update :workers
+              #(conj %
+                     {:job job
+                      :ends-at (+ cur-sec (processing-seconds job))}))
+      (update :jobs
+              #(dissoc % job))
+      (update :history
+              #(conj % job))))
 
 (defn emulate-time-to
   "시간이 진행한 후에 벌어지는 상태변화를 구현합니다.
@@ -164,7 +147,8 @@
 ;; find-jobs-ready
 ;; handle-finished-jobs
 ;;
-;; state 대신 simulation? sim-state? world?
+;; 고민거리
+;; - state 대신 simulation? sim-state? world?
 
 (comment
 

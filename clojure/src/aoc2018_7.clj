@@ -2,7 +2,7 @@
   (:require [clojure.java.io :as io]
             [clojure.set :as set]))
 
-(defn- lines->deps-tuples
+(defn- ->deps-tuples
   "list of tuple, tuple [x y] means x depends on y"
   [lines]
   (for [s lines]
@@ -10,9 +10,9 @@
 
 (defn ->deps
   "deps-tuple 을 의존관계를 담은 map 으로 변환합니다.
-  key 에 node 를, val 에 key 가 의존하는 노드 목록을 담은 map 을 리턴합니다.
 
-  x 가 y 에 의존한다를 y가 끝난 후에 x를 시작할 수 있다는 의미로 사용합니다."
+  key 에 node 를, val 에 key 가 의존하는 node 목록을 담은 map 을 리턴합니다.
+  'x 가 y 에 의존한다'는 y가 끝난 후에 x를 시작할 수 있다는 의미로 사용합니다."
   [a-deps-tuples]
   (reduce (fn [m [x y]]
             (update m x #((fnil conj []) % y)))
@@ -112,7 +112,7 @@
             :deps (remove-nodes-in-val deps finished-nodes)
             :workers (filter (complement ended?) workers)})))
 
-(defn step [{:keys [deps history] :as state}]
+(defn- step [{:keys [deps history] :as state}]
   (let [n (-> deps
               keys-with-empty-val
               sort
@@ -140,30 +140,10 @@
        :history
        (apply str)))
 
-#_(defn solve-part1-rev1
-  ([deps]
-   (solve-part1-rev1 deps (keys-with-empty-val deps)))
-  ([deps remove-candidates]
-   (let [n (first (sort remove-candidates))]
-     (lazy-seq
-      (cons
-       n
-       (let [deps (-> (remove-n-in-val deps n)
-                      (dissoc n))]
-         (if (empty? deps)
-           nil
-           (solve-part1-rev1 deps))))))))
-
-;; solve-part2 도 state 를 받도록 변경 완료.
-;; record 를 제거.
-;; (comp not empty?) 를 not-emtpy 로 변경.
-;; (> x 0) 를 pos? 로 바꿈.
-;; part1 을 part2 의 코드로 바꿈
-;;   언제 start-procssing 한 노드를 저장하나? history 에 남김.
-;; solve-part1 함수도 iterate + drop-while 로 바꿈.
-;;
-;; step 을 좀 더 읽기 쉽게 바꾸자.
-;;
+;; step 을 좀 더 읽기 쉽게,
+;;   (assign, emulate-time-to-next-ends-at) 으로 나눔.
+;; defrecord 삭제.
+;; worker-pool 개념을 없앰.
 
 (comment
 
@@ -177,14 +157,13 @@
 
   (set! *print-length* 30)
 
-  (def lines
-    (-> "day7.txt"
-        io/resource
-        io/reader
-        line-seq))
+  (def lines (-> "day7.txt"
+                 io/resource
+                 io/reader
+                 line-seq))
 
   (def deps (-> lines
-                lines->deps-tuples
+                ->deps-tuples
                 ->deps
                 ammend-deps))
 
@@ -200,11 +179,5 @@
                      :cur-time 0
                      :workers []
                      :history []})
-
-  ;; part1-rev1
-
-  (->> deps
-       solve-part1-rev1
-       clojure.string/join)
 
   )

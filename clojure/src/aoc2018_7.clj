@@ -9,10 +9,9 @@
     (vec (reverse (drop 1 (re-seq #"[A-Z]" s))))))
 
 (defn ->jobs
-  "jobs-tuple 을 의존관계를 담은 map 으로 변환합니다.
+  "jobs-tuple 을 job 의 의존관계를 담은 map 으로 변환합니다.
 
-  key 에 node(==job) 를, val 에 key 가 의존하는 node(==job) 목록을
-  담은 map 을 리턴합니다.
+  key 에 node(==job) 를, val 에 key 가 의존하는 node(==job) 목록을 담은 map 을 리턴합니다.
   'x 가 y 에 의존한다'는 job y가 끝난 후에 job x를 시작할 수 있다는 의미로 사용합니다."
   [a-jobs-tuples]
   (reduce (fn [m [x y]]
@@ -21,7 +20,7 @@
           a-jobs-tuples))
 
 (defn all-nodes
-  "jobs 안에 존재하는 모든 nodes."
+  "map jobs 안에 존재하는 모든 nodes(==jobs)."
   [jobs]
   (let [nodes-in-key (keys jobs)
         nodes-in-val (apply concat (vals jobs))]
@@ -44,10 +43,10 @@
              []
              jobs))
 
-(def find-jobs-ready keys-with-empty-val)
-
 (defn ammend-jobs
-  "jobs 를, val 에만 존재하는 node 도 key 로
+  "jobs 를 고칩니다.
+
+   val 에만 존재하는 node(==job) 도 key 로
    -- empty vector 를 val 로 -- 넣습니다."
   [jobs]
   (reduce (fn [jobs n] (assoc jobs n []))
@@ -70,9 +69,13 @@
 
 ;; part2
 
-(defn processing-seconds [node]
-  {:pre [(= 1 (count node))]}
-  (+ 60 (- (int (first node)) 64)))
+(def find-jobs-ready keys-with-empty-val)
+
+(def handle-finished-jobs remove-nodes-in-val)
+
+(defn processing-seconds [job]
+  {:pre [(= 1 (count job))]}
+  (+ 60 (- (int (first job)) 64)))
 
 (defn available-worker-count [{:keys [capacity workers]}]
   (- capacity (count workers)))
@@ -84,23 +87,24 @@
   (pos? (available-worker-count state)))
 
 (defn assign
-  "가능한 worker 가 있고 처리할 node 도 있으면
+  "가능한 worker 가 있고 처리할 job 도 있으면 상태변화를 만듭니다.
+
    worker 를 추가하고
    jobs 에서도 제거하고 (dissoc)
    history 에도 추가한다."
-  [{:keys [cur-sec] :as state} n]
+  [{:keys [cur-sec] :as state} job]
   {:pre [(worker-available? state)]}
-  (if (nil? n)
+  (if (nil? job)
     state
     (-> state
         (update :workers
                 #(conj %
-                       {:node n
-                        :ends-at (+ cur-sec (processing-seconds n))}))
+                       {:job job
+                        :ends-at (+ cur-sec (processing-seconds job))}))
         (update :jobs
-                #(dissoc % n))
+                #(dissoc % job))
         (update :history
-                #(conj % n)))))
+                #(conj % job)))))
 
 (defn emulate-time-to
   "시간이 진행한 후에 벌어지는 상태변화를 구현합니다.
@@ -110,12 +114,12 @@
    workers 에 진행중인 worker 만 남깁니다."
   [{:keys [cur-sec jobs workers] :as state} sec]
   (let [ended? (fn [worker] (<= (:ends-at worker) sec))
-        finished-nodes (->> workers
-                            (filter ended?)
-                            (map :node))]
+        finished-jobs (->> workers
+                           (filter ended?)
+                           (map :job))]
     (merge state
            {:cur-sec sec
-            :jobs (remove-nodes-in-val jobs finished-nodes)
+            :jobs (handle-finished-jobs jobs finished-jobs)
             :workers (filter (complement ended?) workers)})))
 
 (defn emulate-time-to-next-ends-at
@@ -125,12 +129,12 @@
   (emulate-time-to state (next-ends-at state)))
 
 (defn- step [{:keys [jobs history] :as state}]
-  (let [n (-> jobs
+  (let [job (-> jobs
               find-jobs-ready
               sort
               first)]
-    (if (and (worker-available? state) n)
-      (assign state n)
+    (if (and (worker-available? state) job)
+      (assign state job)
       (emulate-time-to-next-ends-at state))))
 
 (defn solve-part2 [state]
@@ -152,16 +156,15 @@
        :history
        (apply str)))
 
-;; step 을 좀 더 읽기 쉽게,
+;; step 을
 ;;   (assign, emulate-time-to-next-ends-at) 으로 나눔.
-;; defrecord 삭제.
-;; worker-pool 개념을 없앰.
-;; 단어 deps 를 jobs 로 바꿈.
+;; defrecord 삭제. worker-pool 개념을 없앰.
+;; s/cur-time/cur-sec/
+;; s/deps/jobs/
+;; find-jobs-ready
+;; handle-finished-jobs
 ;;
-;; XXX spec 적용?
-;; XXX remove-nodes-in-val 구현을 set 끼리 하는 것이 더 적절한가?
-;; XXX remove-n-in-val 을 없애는 것이 더 적절한가?
-;; XXX state 대신 simulation?
+;; state 대신 simulation? sim-state? world?
 
 (comment
 

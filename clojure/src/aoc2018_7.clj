@@ -53,25 +53,25 @@
           jobs
           (nodes-only-exists-in-val jobs)))
 
-(defn remove-n-in-val [jobs n]
+(defn remove-finished-job-in-val [jobs a-finished-job]
   {:pre [(map? jobs)
-         (empty? (jobs n))]}
+         (empty? (jobs a-finished-job))]}
   (reduce-kv (fn [m k nodes]
-               (let [nodes' (seq (remove #{n} nodes))]
+               (let [nodes' (seq (remove #{a-finished-job} nodes))]
                  (assoc m k (vec nodes'))))
              {}
              jobs))
 
-(defn remove-nodes-in-val [jobs nodes]
-  (reduce #(remove-n-in-val %1 %2)
+(defn remove-finished-jobs-in-val [jobs finished-jobs]
+  (reduce #(remove-finished-job-in-val %1 %2)
           jobs
-          nodes))
+          finished-jobs))
 
 ;; part2
 
 (def find-jobs-ready keys-with-empty-val)
 
-(def handle-finished-jobs remove-nodes-in-val)
+(def handle-finished-jobs remove-finished-jobs-in-val)
 
 (defn processing-seconds [job]
   {:pre [(= 1 (count job))]}

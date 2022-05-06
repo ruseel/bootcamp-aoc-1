@@ -11,8 +11,9 @@
 (defn ->jobs
   "jobs-tuple 을 의존관계를 담은 map 으로 변환합니다.
 
-  key 에 node 를, val 에 key 가 의존하는 node 목록을 담은 map 을 리턴합니다.
-  'x 가 y 에 의존한다'는 y가 끝난 후에 x를 시작할 수 있다는 의미로 사용합니다."
+  key 에 node(==job) 를, val 에 key 가 의존하는 node(==job) 목록을
+  담은 map 을 리턴합니다.
+  'x 가 y 에 의존한다'는 job y가 끝난 후에 job x를 시작할 수 있다는 의미로 사용합니다."
   [a-jobs-tuples]
   (reduce (fn [m [x y]]
             (update m x #((fnil conj []) % y)))
@@ -43,9 +44,11 @@
              []
              jobs))
 
+(def find-jobs-ready keys-with-empty-val)
+
 (defn ammend-jobs
   "jobs 를, val 에만 존재하는 node 도 key 로
-   -- empty vector 를 가지도록 해서 -- 넣습니다."
+   -- empty vector 를 val 로 -- 넣습니다."
   [jobs]
   (reduce (fn [jobs n] (assoc jobs n []))
           jobs
@@ -123,7 +126,7 @@
 
 (defn- step [{:keys [jobs history] :as state}]
   (let [n (-> jobs
-              keys-with-empty-val
+              find-jobs-ready
               sort
               first)]
     (if (and (worker-available? state) n)
@@ -156,7 +159,6 @@
 ;; 단어 deps 를 jobs 로 바꿈.
 ;;
 ;; XXX spec 적용?
-;; XXX nodes-only-exists-in-key 를 좀 더 문제 영역에 가까운 단어로 변경?
 ;; XXX remove-nodes-in-val 구현을 set 끼리 하는 것이 더 적절한가?
 ;; XXX remove-n-in-val 을 없애는 것이 더 적절한가?
 ;; XXX state 대신 simulation?

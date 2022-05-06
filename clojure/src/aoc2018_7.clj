@@ -67,7 +67,7 @@
 
 ;; part2
 
-(defn processing-duration [node]
+(defn processing-seconds [node]
   {:pre [(= 1 (count node))]}
   (+ 60 (- (int (first node)) 64)))
 
@@ -85,7 +85,7 @@
    worker 를 추가하고
    jobs 에서도 제거하고 (dissoc)
    history 에도 추가한다."
-  [{:keys [cur-time] :as state} n]
+  [{:keys [cur-sec] :as state} n]
   {:pre [(worker-available? state)]}
   (if (nil? n)
     state
@@ -93,7 +93,7 @@
         (update :workers
                 #(conj %
                        {:node n
-                        :ends-at (+ cur-time (processing-duration n))}))
+                        :ends-at (+ cur-sec (processing-seconds n))}))
         (update :jobs
                 #(dissoc % n))
         (update :history
@@ -102,16 +102,16 @@
 (defn emulate-time-to
   "시간이 진행한 후에 벌어지는 상태변화를 구현합니다.
 
-   cur-time 을 time 으로 옮기고,
+   cur-sec 을 sec 으로 옮기고,
    jobs 에서 완료된 nodes 를 지우고,
    workers 에 진행중인 worker 만 남깁니다."
-  [{:keys [cur-time jobs workers] :as state} time]
-  (let [ended? (fn [worker] (<= (:ends-at worker) time))
+  [{:keys [cur-sec jobs workers] :as state} sec]
+  (let [ended? (fn [worker] (<= (:ends-at worker) sec))
         finished-nodes (->> workers
                             (filter ended?)
                             (map :node))]
     (merge state
-           {:cur-time time
+           {:cur-sec sec
             :jobs (remove-nodes-in-val jobs finished-nodes)
             :workers (filter (complement ended?) workers)})))
 
@@ -137,7 +137,7 @@
                      (or (not-empty workers)
                          (not-empty jobs))))
        first
-       :cur-time))
+       :cur-sec))
 
 (defn solve-part1-rev2 [state]
   (->> state
@@ -156,7 +156,6 @@
 ;; 단어 deps 를 jobs 로 바꿈.
 ;;
 ;; XXX spec 적용?
-;; XXX time 대신 sec 이 더 적절한 단어일까?
 ;; XXX nodes-only-exists-in-key 를 좀 더 문제 영역에 가까운 단어로 변경?
 ;; XXX remove-nodes-in-val 구현을 set 끼리 하는 것이 더 적절한가?
 ;; XXX remove-n-in-val 을 없애는 것이 더 적절한가?
@@ -186,14 +185,14 @@
 
   (solve-part2 {:capacity 5
                 :jobs jobs
-                :cur-time 0
+                :cur-sec 0
                 :workers []
                 :history []})
 
   ;; part1-rev2
   (solve-part1-rev2 {:capacity 1
                      :jobs jobs
-                     :cur-time 0
+                     :cur-sec 0
                      :workers []
                      :history []})
 

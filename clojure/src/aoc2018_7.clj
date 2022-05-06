@@ -2,70 +2,74 @@
   (:require [clojure.java.io :as io]
             [clojure.set :as set]))
 
-(defn- ->deps-tuples
+(defn- ->jobs-tuples
   "list of tuple, tuple [x y] means x depends on y"
   [lines]
   (for [s lines]
     (vec (reverse (drop 1 (re-seq #"[A-Z]" s))))))
 
-(defn ->deps
-  "deps-tuple 을 의존관계를 담은 map 으로 변환합니다.
+(defn ->jobs
+  "jobs-tuple 을 의존관계를 담은 map 으로 변환합니다.
 
   key 에 node 를, val 에 key 가 의존하는 node 목록을 담은 map 을 리턴합니다.
   'x 가 y 에 의존한다'는 y가 끝난 후에 x를 시작할 수 있다는 의미로 사용합니다."
-  [a-deps-tuples]
+  [a-jobs-tuples]
   (reduce (fn [m [x y]]
             (update m x #((fnil conj []) % y)))
           {}
-          a-deps-tuples))
+          a-jobs-tuples))
 
 (defn all-nodes
-  "deps 안에 존재하는 모든 nodes."
-  [deps]
-  (let [nodes-in-key (keys deps)
-        nodes-in-val (apply concat (vals deps))]
+  "jobs 안에 존재하는 모든 nodes."
+  [jobs]
+  (let [nodes-in-key (keys jobs)
+        nodes-in-val (apply concat (vals jobs))]
     (concat nodes-in-key nodes-in-val)))
 
 (defn nodes-only-exists-in-val
   "key 에 존재하지 않고 val (== list of nodes) 에만 존재하는 nodes."
-  [deps]
+  [jobs]
   (set/difference
-   (set (all-nodes deps))
-   (set (keys deps))))
+   (set (all-nodes jobs))
+   (set (keys jobs))))
 
 (defn keys-with-empty-val
   "empty list of nodes 를 가진 key 목록."
-  [deps]
+  [jobs]
   (reduce-kv (fn [result k vs]
                (if (empty? vs)
                  (conj result k)
                  result))
              []
-             deps))
+             jobs))
 
-(defn ammend-deps
-  "deps 를, val 에만 존재하는 node 도 key 로
+(defn ammend-jobs
+  "jobs 를, val 에만 존재하는 node 도 key 로
    -- empty vector 를 가지도록 해서 -- 넣습니다."
-  [deps]
-  (reduce (fn [deps n] (assoc deps n []))
-          deps
-          (nodes-only-exists-in-val deps)))
+  [jobs]
+  (reduce (fn [jobs n] (assoc jobs n []))
+          jobs
+          (nodes-only-exists-in-val jobs)))
 
-(defn remove-n-in-val [deps n]
-  {:pre [(map? deps)
-         (empty? (deps n))]}
+(defn remove-n-in-val [jobs n]
+  {:pre [(map? jobs)
+         (empty? (jobs n))]}
   (reduce-kv (fn [m k nodes]
                (let [nodes' (seq (remove #{n} nodes))]
                  (assoc m k (vec nodes'))))
              {}
-             deps))
+             jobs))
 
-(defn remove-nodes-in-val [deps nodes]
+(defn remove-nodes-in-val [jobs nodes]
   (reduce #(remove-n-in-val %1 %2)
-          deps
+          jobs
           nodes))
 
 ;; part2
+
+(defn processing-duration [node]
+  {:pre [(= 1 (count node))]}
+  (+ 60 (- (int (first node)) 64)))
 
 (defn available-worker-count [{:keys [capacity workers]}]
   (- capacity (count workers)))
@@ -73,17 +77,14 @@
 (defn next-ends-at [{:keys [workers]}]
   (->> workers (map :ends-at) seq (apply min)))
 
-(defn emulate-time-to-next-ends-at [state]
-  (emulate-time-to state (next-ends-at state)))
-
-(defn processing-duration [node]
-  {:pre [(= 1 (count node))]}
-  (+ 60 (- (int (first node)) 64)))
-
 (defn worker-available? [state]
   (pos? (available-worker-count state)))
 
 (defn assign
+  "가능한 worker 가 있고 처리할 node 도 있으면
+   worker 를 추가하고
+   jobs 에서도 제거하고 (dissoc)
+   history 에도 추가한다."
   [{:keys [cur-time] :as state} n]
   {:pre [(worker-available? state)]}
   (if (nil? n)
@@ -93,27 +94,35 @@
                 #(conj %
                        {:node n
                         :ends-at (+ cur-time (processing-duration n))}))
-        (update :deps
+        (update :jobs
                 #(dissoc % n))
         (update :history
                 #(conj % n)))))
 
 (defn emulate-time-to
-  "cur-time 을 time 으로 옮기고,
-   deps 에서 완료된 nodes 를 지우고,
+  "시간이 진행한 후에 벌어지는 상태변화를 구현합니다.
+
+   cur-time 을 time 으로 옮기고,
+   jobs 에서 완료된 nodes 를 지우고,
    workers 에 진행중인 worker 만 남깁니다."
-  [{:keys [cur-time deps workers] :as state} time]
+  [{:keys [cur-time jobs workers] :as state} time]
   (let [ended? (fn [worker] (<= (:ends-at worker) time))
         finished-nodes (->> workers
                             (filter ended?)
                             (map :node))]
     (merge state
            {:cur-time time
-            :deps (remove-nodes-in-val deps finished-nodes)
+            :jobs (remove-nodes-in-val jobs finished-nodes)
             :workers (filter (complement ended?) workers)})))
 
-(defn- step [{:keys [deps history] :as state}]
-  (let [n (-> deps
+(defn emulate-time-to-next-ends-at
+  "worker 가 작업을 끝낼 시간으로
+  시간진행이 일어난 것 처럼 바꿉니다"
+  [state]
+  (emulate-time-to state (next-ends-at state)))
+
+(defn- step [{:keys [jobs history] :as state}]
+  (let [n (-> jobs
               keys-with-empty-val
               sort
               first)]
@@ -124,18 +133,18 @@
 (defn solve-part2 [state]
   (->> state
        (iterate step)
-       (drop-while (fn [{:keys [workers deps]}]
+       (drop-while (fn [{:keys [workers jobs]}]
                      (or (not-empty workers)
-                         (not-empty deps))))
+                         (not-empty jobs))))
        first
        :cur-time))
 
 (defn solve-part1-rev2 [state]
   (->> state
        (iterate step)
-       (drop-while (fn [{:keys [workers deps]}]
+       (drop-while (fn [{:keys [workers jobs]}]
                      (or (not-empty workers)
-                         (not-empty deps))))
+                         (not-empty jobs))))
        first
        :history
        (apply str)))
@@ -144,6 +153,14 @@
 ;;   (assign, emulate-time-to-next-ends-at) 으로 나눔.
 ;; defrecord 삭제.
 ;; worker-pool 개념을 없앰.
+;; 단어 deps 를 jobs 로 바꿈.
+;;
+;; XXX spec 적용?
+;; XXX time 대신 sec 이 더 적절한 단어일까?
+;; XXX nodes-only-exists-in-key 를 좀 더 문제 영역에 가까운 단어로 변경?
+;; XXX remove-nodes-in-val 구현을 set 끼리 하는 것이 더 적절한가?
+;; XXX remove-n-in-val 을 없애는 것이 더 적절한가?
+;; XXX state 대신 simulation?
 
 (comment
 
@@ -162,20 +179,20 @@
                  io/reader
                  line-seq))
 
-  (def deps (-> lines
-                ->deps-tuples
-                ->deps
-                ammend-deps))
+  (def jobs (-> lines
+                ->jobs-tuples
+                ->jobs
+                ammend-jobs))
 
   (solve-part2 {:capacity 5
-                :deps deps
+                :jobs jobs
                 :cur-time 0
                 :workers []
                 :history []})
 
   ;; part1-rev2
   (solve-part1-rev2 {:capacity 1
-                     :deps deps
+                     :jobs jobs
                      :cur-time 0
                      :workers []
                      :history []})

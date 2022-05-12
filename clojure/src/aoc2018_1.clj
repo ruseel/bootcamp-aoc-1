@@ -48,7 +48,7 @@
 
 ;; clojure.core/dedups 를 참조해서 살짝 고쳤습니다.
 (defn dups
-  "이전에 만난 요소가 있을 때는 그 요소를, 아니면 nil 을 리턴합니다"
+  "이전에 만난 요소만을 돌려주는 xf"
   []
   (fn [xf]
     (let [seen (volatile! #{})]
@@ -60,9 +60,7 @@
            (vswap! seen conj input)
            (if (hist input)
              (xf result input)
-             (xf result nil))))))))
-
-(def dups-xf (comp (dups) (filter some?)))
+             result)))))))
 
 (comment
 
@@ -77,11 +75,10 @@
   (find-first-dup-2 (cycled-freq vs))
 
   ;; dups
-  (= [nil nil] (into [] (dups) [0 1]))
-  (= [nil 1] (into [] (dups) [1 1]))
-  (= [nil nil 0 1] (into [] (dups) [0 1 0 1]))
+  (= [] (into [] (dups) [0 1]))
+  (= [1] (into [] (dups) [1 1]))
+  (= [0 1] (into [] (dups) [0 1 0 1]))
 
-  ;; dups-xf
-  (first (sequence dups-xf (cycled-freq vs)))
+  (first (sequence (dups) (cycled-freq vs)))
 
   )
